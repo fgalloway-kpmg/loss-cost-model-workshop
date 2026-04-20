@@ -7,6 +7,7 @@ Welcome! This repository contains materials for the session:
 ## Files Included
 
 'loss_cost_workshop.R' - main R script
+
 'loss_cost_data.csv' - dataset
 
 ## Getting Started
