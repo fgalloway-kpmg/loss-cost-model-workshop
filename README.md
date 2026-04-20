@@ -24,7 +24,7 @@ Welcome! This repository contains materials for the session:
 ## Requirements
 - R (latest version)
 - RStudio
-- Packages: dplyr, ggplot2, caret, tweedie, statmod
+- Packages: tidyverse, DescTools, corrplot, caret, tweedie, statmod, xgboost, Matrix
 
 ## Notes
 This dataset is for educational purposes only.
