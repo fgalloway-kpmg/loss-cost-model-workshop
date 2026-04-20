@@ -11,12 +11,10 @@
 # https://cran.r-project.org/doc/contrib/Short-refcard.pdf
 # https://dplyr.tidyverse.org/
 
-
 # Install Packages
 install.packages("tidyverse")
 
 library(tidyverse)
-
 
 # Load Data
 df <- read.csv("C:/Users/fgall/Desktop/CAS/2026 Spring Meeting/loss_cost_data.csv")
