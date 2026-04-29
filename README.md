@@ -18,8 +18,7 @@ Welcome! This repository contains materials for the session:
 2. Install:
    - R
    - RStudio
-3. Open the '.R' file in RStudio
-4. Set working directory to the file location
+3. Open the 'loss_cost_workshop - Live Demo.R' file in RStudio
 
 ## Requirements
 - R (latest version)
