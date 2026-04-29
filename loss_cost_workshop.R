@@ -57,36 +57,36 @@ df %>% select(where(is.character)) %>% head()
 
 
 ## Filter Data
-### Filter to Sedans
+### Filter vehicle_type to Sedan
 df %>% filter(vehicle_type=='Sedan') %>% head()
 
-### Filter to Sedans with less than 15,000 annual_miles
+### Filter vehicle_type to Sedans with less than 15,000 annual_miles
 df %>% filter(vehicle_type=='Sedan', annual_miles < 15000) %>% head()
 
-### Filter to records with named_insured_age less than 24 or annual_miles over 15,000
-df %>% filter(named_insured_age < 24 | annual_miles > 15000) %>% head()
+### Filter to records with vehicle_type as Sedan or annual_miles less than 15,000
+df %>% filter(vehicle_type=='Sedan' | annual_miles < 15000) %>% head()
 
 ### Filter to missing values of credit_score or annual_miles
-df %>% filter(is.na(driver_tenure) | is.na(annual_miles)) %>% head()
+df %>% filter(is.na(credit_score) | is.na(annual_miles)) %>% head()
 
 
 ## Sort Data
-### Sort based on annual miles
+### Sort based on annual_miles
 df %>% arrange(annual_miles) %>% head()
 
-### Sort based on descending collision_loss_cost
-df %>% arrange(desc(collision_loss_cost)) %>% head()
+### Sort based on descending annual_miles
+df %>% arrange(desc(annual_miles)) %>% head()
 
 ### Sort based on named_insured_age and descending vehicle_age
 df %>% arrange(named_insured_age, desc(vehicle_age)) %>% head()
 
 
 ## Summarize Data
-### What is the mean and median loss cost?
+### What is the mean and median collision_loss_cost?
 df$collision_loss_cost %>% mean()
 df$collision_loss_cost %>% median()
 
-### What are the min and max annual miles?
+### What are the min and max annual_miles?
 df$annual_miles %>% min(na.rm = TRUE)
 df$annual_miles %>% max(na.rm = TRUE)
 
@@ -96,7 +96,7 @@ library(DescTools)
 df$vehicle_age %>% Mode(na.rm = TRUE)
 df$named_insured_age %>% Mode(na.rm = TRUE)
 
-### What is the average annual mileage by territory?
+### What are the average annual_miles by territory?
 df %>% group_by(territory) %>% summarise(avg_miles = mean(annual_miles,na.rm=TRUE))
 df %>% group_by(territory) %>% summarise(median_miles = median(annual_miles,na.rm=TRUE))
 df %>% group_by(territory, marital_status) %>% summarise(avg_miles = mean(annual_miles,na.rm=TRUE))
@@ -149,8 +149,7 @@ corrplot(corr_matrix,
 # Data Modification
 ############################################################
 # Check for duplicate records
-df %>% duplicated()
-df %>% filter(duplicated(df)) %>% dim()
+df %>% duplicated() %>% sum()
 
 # Check Factor levels
 ## Convert strings to factors
@@ -161,14 +160,16 @@ df1[char_cols] <- lapply(df1[char_cols], as.factor)
 df1$youthful_driver <- as.factor(df1$youthful_driver)
 df1$collision_deductible <- as.factor(df1$collision_deductible)
 
-df1 %>% group_by(territory) %>% summarise(count = n())
-df1 %>% group_by(vehicle_type) %>% summarise(count = n())
-df1 %>% group_by(marital_status) %>% summarise(count = n())
-df1 %>% group_by(underwriting_company) %>% summarise(count = n())
-df1 %>% group_by(youthful_driver) %>% summarise(count = n())
-df1 %>% group_by(collision_deductible) %>% summarise(count = n())
+## Review exposure by level
+df1 %>% group_by(territory) %>% summarise(agg_exposure = sum(exposure))
+df1 %>% group_by(vehicle_type) %>% summarise(agg_exposure = sum(exposure))
+df1 %>% group_by(marital_status) %>% summarise(agg_exposure = sum(exposure))
+df1 %>% group_by(underwriting_company) %>% summarise(agg_exposure = sum(exposure))
+df1 %>% group_by(youthful_driver) %>% summarise(agg_exposure = sum(exposure))
+df1 %>% group_by(collision_deductible) %>% summarise(agg_exposure = sum(exposure))
 
-df1$territory <- relevel(df1$territory, ref = "Suburban")
+## Adjust base level of the categorical variable
+df1$territory <- relevel(df1$territory, ref = "Urban")
 df1$underwriting_company <- relevel(df1$underwriting_company, ref = "Standard")
 df1$collision_deductible <- relevel(df1$collision_deductible, ref = "500")
 
@@ -190,12 +191,13 @@ summary(df2)
 ############################################################
 # Train/Test Split
 ############################################################
+library(caret)
+set.seed(123)
+
 # Remove columns
 df3 <- select(df2, -policy_id, -model_year, -collision_total_loss)
 
-library(caret)
-
-set.seed(123)
+# Create train/test index
 trainIndex <- createDataPartition(df3$collision_loss_cost,p=.7,list=FALSE)
 
 train <- df3 %>% slice(trainIndex)
@@ -207,7 +209,7 @@ test  <- df3 %>% slice(-trainIndex)
 # Severity
 ## Gamma
 sev_model <- glm(
-  severity ~ vehicle_age + territory_group,
+  severity ~ vehicle_age + territory,
   data = filter(train, severity > 0),
   family = Gamma(link = "log")
 )
@@ -215,16 +217,16 @@ sev_model <- glm(
 summary(sev_model)
 
 ## Residual Plots
-plot(residuals(sev_model, type = "deviance"))
+plot(fitted(sev_model), residuals(sev_model, type = "deviance"))
 termplot(sev_model, partial.resid = TRUE, se = TRUE)
 
 ## Variable Transformations - Train
-### Territory
-train$territory_group <- ifelse(train$territory %in% c("Suburban","Rural"),"Suburban/Rural", "Urban") %>% as.factor()
+### Territory Group
+train$territory_group <- ifelse(train$territory == "Urban", "Urban", "Suburban/Rural", "Urban") %>% as.factor()
 
 ## Variable Transformations - Test
 ### Territory Group
-test$territory_group <- ifelse(test$territory %in% c("Suburban","Rural"),"Suburban/Rural", "Urban") %>% as.factor()
+test$territory_group <- ifelse(test$territory == "Urban", "Urban", "Suburban/Rural", "Urban") %>% as.factor()
 
 ## Predictions
 sev_pred <- predict(sev_model, test, type = "response")
@@ -232,7 +234,7 @@ sev_pred <- predict(sev_model, test, type = "response")
 # Frequency
 ## Poisson
 freq_model <- glm(
-  collision_claim_count ~ vehicle_age + credit_score + at_fault_accidents + territory_group + vehicle_group + underwriting_group,
+  collision_claim_count ~ vehicle_age + credit_score + at_fault_accidents + territory,
   data = train,
   family = poisson(link = "log"),
   offset = log(exposure)
@@ -241,7 +243,7 @@ freq_model <- glm(
 summary(freq_model)
 
 ## Residual Plots
-plot(residuals(freq_model, type = "deviance"))
+plot(fitted(freq_model), residuals(freq_model, type = "deviance"))
 termplot(freq_model, partial.resid = TRUE, se = TRUE)
 
 ## Variable Transformations - Train
@@ -254,13 +256,14 @@ train$underwriting_group <- ifelse(train$underwriting_company == "NonStandard", 
 train$underwriting_group <- relevel(train$underwriting_group, ref = "Standard/Preferred")
 
 ## Variable Transformations - Test
+### Vehicle Group
+test$vehicle_group <- ifelse(test$vehicle_type == "Sports", "HighRisk", "Standard") %>% as.factor()
+test$vehicle_group <- relevel(test$vehicle_group, ref = "Standard")
+
 ### UW Group
 test$underwriting_group <- ifelse(test$underwriting_company == "NonStandard", "NonStandard", "Standard/Preferred") %>% as.factor()
 test$underwriting_group <- relevel(test$underwriting_group, ref = "Standard/Preferred")
 
-### Vehicle Group
-test$vehicle_group <- ifelse(test$vehicle_type == "Sports", "HighRisk", "Standard") %>% as.factor()
-test$vehicle_group <- relevel(test$vehicle_group, ref = "Standard")
 
 ## Predictions
 freq_pred <- predict(freq_model, test, type = "response")
@@ -276,14 +279,16 @@ tweedie_power <- tweedie_profile(
 )$xi.max
 
 ## Tweedie Model
-twed_model <- glm(collision_loss_cost ~ vehicle_age + credit_score + at_fault_accidents + territory_group + vehicle_group + underwriting_group,
+twed_model <- glm(collision_loss_cost ~ vehicle_age + credit_score + at_fault_accidents + territory,
                data=train,
                family=tweedie(var.power=tweedie_power, link.power = 0)
                )
 
 summary(twed_model)
+tweedie_AIC(twed_model)
 
-plot(residuals(twed_model, type = "deviance"))
+## Residual Plots
+plot(fitted(twed_model), residuals(twed_model, type = "deviance"))
 termplot(twed_model, partial.resid = TRUE, se = TRUE)
 
 ## Predictions
@@ -295,10 +300,10 @@ twed_pred <- predict(twed_model, test, type = "response")
 library(xgboost)
 library(Matrix)
 
-X_train <- model.matrix(collision_loss_cost ~ . -1 -exposure -collision_claim_count -severity -territory_group -vehicle_group -underwriting_group, train)
+X_train <- model.matrix(collision_loss_cost ~ . -1 -exposure -collision_claim_count -severity, train)
 y_train <- train$collision_loss_cost
 
-X_test <- model.matrix(collision_loss_cost ~ . -1 -exposure -collision_claim_count -severity -territory_group -vehicle_group -underwriting_group, test)
+X_test <- model.matrix(collision_loss_cost ~ . -1 -exposure -collision_claim_count -severity, test)
 
 xgb_model <- xgboost(
   x = X_train,
